@@ -1,0 +1,27 @@
+# Copy this file to terraform.tfvars and fill in your values
+# DO NOT commit terraform.tfvars to version control
+
+aws_region    = "ap-southeast-1"
+project_name  = "expense-tracker"
+ami_id        = "ami-02289b3fe036fe5cd"
+instance_type = "t3.micro"
+
+# Database
+db_name     = "expensetracker"
+db_username = "dbadmin"
+db_password = "X3appleX99"
+
+# Application
+jwt_secret = "YOUR_JWT_SECRET_HERE"
+
+# GitHub repository (public URL for EC2 to clone)
+github_repo = "https://github.com/YOUR_USERNAME/ExpenseTracker-Cloud-V3.git"
+
+# Email (optional - for nodemailer)
+email_user = ""
+email_pass = ""
+
+# Auto Scaling
+asg_min_size         = 2
+asg_max_size         = 4
+asg_desired_capacity = 2

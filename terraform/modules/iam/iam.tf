@@ -7,8 +7,13 @@ variable "project_name" {
   type        = string
 }
 
-variable "vpc_id" {
-  description = "VPC ID"
+variable "app_bucket_arn" {
+  description = "ARN of the application S3 bucket"
+  type        = string
+}
+
+variable "frontend_bucket_arn" {
+  description = "ARN of the frontend S3 bucket"
   type        = string
 }
 
@@ -16,115 +21,73 @@ variable "vpc_id" {
 # RESOURCES
 ###############################################################################
 
-# ALB Security Group - allows HTTP from the internet
-resource "aws_security_group" "alb_sg" {
-  name        = "${var.project_name}-alb-sg"
-  description = "Allow HTTP traffic to ALB"
-  vpc_id      = var.vpc_id
+resource "aws_iam_role" "ec2_role" {
+  name = "${var.project_name}-ec2-role"
 
-  ingress {
-    description = "HTTP from internet"
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+      }
+    ]
+  })
 
   tags = {
-    Name = "${var.project_name}-alb-sg"
+    Name = "${var.project_name}-ec2-role"
   }
 }
 
-# EC2 Security Group - allows traffic only from ALB
-resource "aws_security_group" "ec2_sg" {
-  name        = "${var.project_name}-ec2-sg"
-  description = "Allow traffic from ALB to EC2 instances"
-  vpc_id      = var.vpc_id
+resource "aws_iam_role_policy" "ec2_s3_policy" {
+  name = "${var.project_name}-ec2-s3-policy"
+  role = aws_iam_role.ec2_role.id
 
-  ingress {
-    description     = "HTTP from ALB"
-    from_port       = 3000
-    to_port         = 3000
-    protocol        = "tcp"
-    security_groups = [aws_security_group.alb_sg.id]
-  }
-
-  ingress {
-    description = "SSH from anywhere"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  ingress {
-    description = "HTTPS from anywhere"
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = {
-    Name = "${var.project_name}-ec2-sg"
-  }
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:PutObject",
+          "s3:GetObject",
+          "s3:DeleteObject",
+          "s3:ListBucket"
+        ]
+        Resource = [
+          var.app_bucket_arn,
+          "${var.app_bucket_arn}/*",
+          var.frontend_bucket_arn,
+          "${var.frontend_bucket_arn}/*"
+        ]
+      }
+    ]
+  })
 }
 
-# RDS Security Group - allows traffic only from EC2
-resource "aws_security_group" "rds_sg" {
-  name        = "${var.project_name}-rds-sg"
-  description = "Allow PostgreSQL traffic from EC2 instances"
-  vpc_id      = var.vpc_id
+resource "aws_iam_role_policy_attachment" "cloudwatch_agent" {
+  role       = aws_iam_role.ec2_role.name
+  policy_arn = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+}
 
-  ingress {
-    description     = "PostgreSQL from EC2"
-    from_port       = 5432
-    to_port         = 5432
-    protocol        = "tcp"
-    security_groups = [aws_security_group.ec2_sg.id]
-  }
+resource "aws_iam_role_policy_attachment" "ssm_managed" {
+  role       = aws_iam_role.ec2_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
 
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = {
-    Name = "${var.project_name}-rds-sg"
-  }
+resource "aws_iam_instance_profile" "ec2_profile" {
+  name = "${var.project_name}-ec2-profile"
+  role = aws_iam_role.ec2_role.name
 }
 
 ###############################################################################
 # OUTPUTS
 ###############################################################################
 
-output "alb_sg_id" {
-  description = "ALB security group ID"
-  value       = aws_security_group.alb_sg.id
-}
-
-output "ec2_sg_id" {
-  description = "EC2 security group ID"
-  value       = aws_security_group.ec2_sg.id
-}
-
-output "rds_sg_id" {
-  description = "RDS security group ID"
-  value       = aws_security_group.rds_sg.id
+output "ec2_instance_profile_name" {
+  description = "EC2 instance profile name"
+  value       = aws_iam_instance_profile.ec2_profile.name
 }

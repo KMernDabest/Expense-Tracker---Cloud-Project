@@ -42,6 +42,25 @@ variable "db_identifier" {
   type        = string
 }
 
+variable "alert_email" {
+  description = "Email address to receive CloudWatch alarm notifications"
+  type        = string
+}
+
+###############################################################################
+# SNS TOPIC & EMAIL SUBSCRIPTION
+###############################################################################
+
+resource "aws_sns_topic" "alarms" {
+  name = "${var.project_name}-alarms"
+}
+
+resource "aws_sns_topic_subscription" "email" {
+  topic_arn = aws_sns_topic.alarms.arn
+  protocol  = "email"
+  endpoint  = var.alert_email
+}
+
 ###############################################################################
 # CLOUDWATCH ALARMS
 ###############################################################################
@@ -57,7 +76,7 @@ resource "aws_cloudwatch_metric_alarm" "high_cpu" {
   statistic           = "Average"
   threshold           = 70
   alarm_description   = "Scale up when CPU exceeds 70%"
-  alarm_actions       = [var.scale_up_policy_arn]
+  alarm_actions       = [var.scale_up_policy_arn, aws_sns_topic.alarms.arn]
 
   dimensions = {
     AutoScalingGroupName = var.asg_name
@@ -75,7 +94,7 @@ resource "aws_cloudwatch_metric_alarm" "low_cpu" {
   statistic           = "Average"
   threshold           = 30
   alarm_description   = "Scale down when CPU drops below 30%"
-  alarm_actions       = [var.scale_down_policy_arn]
+  alarm_actions       = [var.scale_down_policy_arn, aws_sns_topic.alarms.arn]
 
   dimensions = {
     AutoScalingGroupName = var.asg_name
@@ -93,6 +112,7 @@ resource "aws_cloudwatch_metric_alarm" "unhealthy_hosts" {
   statistic           = "Minimum"
   threshold           = 1
   alarm_description   = "Alert when no healthy hosts behind ALB"
+  alarm_actions       = [aws_sns_topic.alarms.arn]
 
   dimensions = {
     TargetGroup  = var.target_group_arn_suffix
@@ -112,6 +132,7 @@ resource "aws_cloudwatch_metric_alarm" "alb_5xx_errors" {
   threshold           = 10
   alarm_description   = "Alert when 5XX errors exceed 10 in 5 minutes"
   treat_missing_data  = "notBreaching"
+  alarm_actions       = [aws_sns_topic.alarms.arn]
 
   dimensions = {
     LoadBalancer = var.alb_arn_suffix
@@ -129,6 +150,7 @@ resource "aws_cloudwatch_metric_alarm" "rds_cpu" {
   statistic           = "Average"
   threshold           = 80
   alarm_description   = "Alert when RDS CPU exceeds 80%"
+  alarm_actions       = [aws_sns_topic.alarms.arn]
 
   dimensions = {
     DBInstanceIdentifier = var.db_identifier
@@ -146,6 +168,7 @@ resource "aws_cloudwatch_metric_alarm" "rds_storage" {
   statistic           = "Average"
   threshold           = 5000000000 # 5 GB in bytes
   alarm_description   = "Alert when RDS free storage drops below 5GB"
+  alarm_actions       = [aws_sns_topic.alarms.arn]
 
   dimensions = {
     DBInstanceIdentifier = var.db_identifier

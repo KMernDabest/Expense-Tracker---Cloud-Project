@@ -21,6 +21,9 @@ github_repo = "https://github.com/YOUR_USERNAME/ExpenseTracker-Cloud-V3.git"
 email_user = ""
 email_pass = ""
 
+# Email for CloudWatch alarm notifications (SNS)
+alert_email = "your-alert-email@example.com"
+
 # Auto Scaling
 asg_min_size         = 2
 asg_max_size         = 4

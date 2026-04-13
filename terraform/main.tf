@@ -121,4 +121,5 @@ module "monitoring" {
   alb_arn_suffix          = module.loadbalancer.alb_arn_suffix
   target_group_arn_suffix = module.loadbalancer.target_group_arn_suffix
   db_identifier           = module.database.db_identifier
+  alert_email             = var.alert_email
 }
